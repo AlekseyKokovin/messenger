@@ -3,7 +3,7 @@ Description=uWSGI instance to serve production_ml service
 
 [Service]
 User=alex
-WorkingDirectory=/home/alex/app
+WorkingDirectory=/home/alex/app/app
 Environment="PATH=/home/alex/app/venv/bin"
 ExecStart=/home/alex/app/venv/bin/uwsgi --ini /home/alex/app/uwsgi.ini
 Restart=on-failure
