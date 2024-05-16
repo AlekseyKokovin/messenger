@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login</title>
+    <link href="/static/css/register_and_login_style.css" rel="stylesheet">
+</head>
+<body>
+<div class="container">
+    <h2>Login</h2>
+    <form action="/" method="POST">
+        <label for="email">Email:</label>
+        <input type="email" id="email" name="email" required>
+
+        <label for="password">Password:</label>
+        <input type="password" id="password" name="password" required>
+
+        <div class="remember-container">
+            <input type="checkbox" id="rememberMe" name="rememberMe">
+            <label for="rememberMe">Remember Me</label>
+        </div>
+
+
+        <button type="submit">Next</button>
+        <div class="signup-link">
+            Don't have an account? <a href="/register">Sign up</a>
+        </div>
+    </form>
+    {% if message %}
+    <div class="error">
+        {{ message }}
+    </div>
+    {% endif %}
+</div>
+
+</body>
+</html>

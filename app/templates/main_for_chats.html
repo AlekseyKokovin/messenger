@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chats</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/static/css/main_for_chats_style.css" rel="stylesheet">
+</head>
+<body>
+<div class="container-fluid">
+    <div class="row vh-100">
+        <div class="col-4 bg-white p-0">
+            <div class="search-box">
+                <input type="text" class="form-control search-input" placeholder="Search..." onkeyup="filterChats()">
+            </div>
+            <div class="chat-list-container" id="chatsList">
+                <ul class="list-group list-group-flush">
+                    {% for user in users_with_messages %}
+                    {% if user != current_username %}
+                    <li class="list-group-item chat-list-item" data-userid="{{ user }}" data-unread="true"
+                        onclick="selectChat('{{ user }}')">
+                        <div class="chat-info">
+                            <strong>{{ user }}</strong>
+                            <div class="dot-indicator" style="display: none;"></div>
+                            <p class="preview">.</p>
+                        </div>
+                    </li>
+                    {% endif %}
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+        <div class="col-8 bg-light p-0 d-flex flex-column chat-people-divider">
+            <div class="chat-title bg-white">
+                <h4 class="py-2 text-center chat-name" id="chatName">Select A Chat</h4>
+            </div>
+            <div class="p-4 flex-grow-1" id="messages">
+            </div>
+            <div class="p-3 bg-white" id="sendSpace" style="display: none;">
+                <div class="input-group">
+                    <input type="text" class="form-control" id="messageInput" placeholder="Type your message...">
+                    <button class="btn btn-primary send-button" id="sendButton">Send</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script src="https://cdn.socket.io/4.3.1/socket.io.min.js"></script>
+<script>
+    var socket = io.connect('http://' + document.domain + ':' + location.port);
+
+    document.getElementById('sendButton').addEventListener('click', sendMessage);
+
+    function filterChats() {
+        const input = document.querySelector('.search-input').value.toLowerCase();
+        const currentUser = "{{ current_username }}";
+        const users = {{ users | tojson }};
+
+        if (input.trim() === "") {
+            fetch('/get_users_with_messages')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(usersWithMessages => {
+                document.querySelectorAll('.chat-list-item').forEach(item => {
+                    item.style.display = 'none';
+                });
+
+                usersWithMessages.forEach(user => {
+                    const chatItem = document.querySelector(`.chat-list-item[data-userid="${user}"]`);
+                    if (chatItem) {
+                        chatItem.style.display = '';
+                    }
+                });
+            })
+            .catch(error => {
+                console.error('Error fetching users with messages:', error);
+            });
+
+        return;
+        }
+
+        users.forEach(user => {
+            if (user === currentUser) {
+                return;
+            }
+
+            let chatItem = document.querySelector(`.chat-list-item[data-userid="${user}"]`);
+            if (!chatItem) {
+                chatItem = document.createElement('li');
+                chatItem.classList.add('list-group-item', 'chat-list-item');
+                chatItem.setAttribute('data-userid', user);
+
+                const chatInfo = document.createElement('div');
+                chatInfo.classList.add('chat-info');
+
+                const strong = document.createElement('strong');
+                strong.textContent = user;
+                chatInfo.appendChild(strong);
+
+                const preview = document.createElement('p');
+                preview.classList.add('preview');
+                chatInfo.appendChild(preview);
+
+                const dotIndicator = document.createElement('div');
+                dotIndicator.classList.add('dot-indicator');
+                dotIndicator.style.display = 'none';
+                chatInfo.appendChild(dotIndicator);
+
+                chatItem.appendChild(chatInfo);
+
+                chatItem.addEventListener('click', () => selectChat(user));
+
+                const chatListContainer = document.getElementById("chatsList");
+
+                chatListContainer.querySelector('ul').appendChild(chatItem);
+            }
+
+            if (user.toLowerCase().includes(input)) {
+                chatItem.style.display = '';
+            } else {
+                chatItem.style.display = 'none';
+            }
+        });
+    }
+
+    function selectChat(userId) {
+        socket.emit('read', {
+            username: userId
+        });
+        const messagesDiv = document.getElementById("messages");
+        messagesDiv.innerHTML = "";
+        const chatItem = document.querySelector(`.chat-list-item[data-userid="${userId}"]`);
+        if (chatItem && chatItem.getAttribute('data-unread') === 'true') {
+            const dotIndicator = chatItem.querySelector('.dot-indicator');
+            if (dotIndicator) {
+                dotIndicator.style.display = 'none';
+            }
+            chatItem.setAttribute('data-unread', 'false');
+        }
+
+        fetch(`/get_messages/${userId}`)
+            .then(response => response.json())
+            .then(messages => {
+                messages.forEach(message => {
+                    displayMessage(message.sender_handle, message.text);
+                });
+                updatePreview(userId, messages.text);
+            })
+            .catch(error => console.error('Error fetching messages:', error));
+
+        const userName = document.querySelector(`.chat-list-item[data-userid="${userId}"] strong`).textContent;
+        document.getElementById("chatName").textContent = userName;
+        document.getElementById("sendSpace").style.display = 'block';
+
+        const notificationDot = document.querySelector(`.chat-list-item[data-userid="${userId}"] .notification-dot`);
+        if (notificationDot) {
+            notificationDot.remove();
+        }
+    }
+
+    function generateMessageId(text) {
+        return "msg_" + hash(text);
+    }
+
+    function hash(text) {
+        let hash = 0;
+        for (let i = 0; i < text.length; i++) {
+            hash = (hash << 5) - hash + text.charCodeAt(i);
+            hash |= 0; // Convert to 32bit integer
+        }
+        return hash;
+    }
+
+    function displayMessage(sender, text) {
+        const messageId = generateMessageId(text);
+        const messagesDiv = document.getElementById("messages");
+        const messageDiv = document.createElement("div");
+        messageDiv.classList.add("message");
+        const currentUser = "{{ current_username }}";
+        const chatName = document.getElementById("chatName").textContent;
+        if (sender !== currentUser && chatName !== sender) {
+            const chatItem = document.querySelector(`.chat-list-item[data-userid="${sender}"]`);
+            if (chatItem) {
+                const dotIndicator = chatItem.querySelector('.dot-indicator');
+                if (dotIndicator) {
+                    dotIndicator.style.display = 'block';
+                }
+                updatePreview(sender, text);
+            }
+            else{
+                chatItem2 = document.createElement('li');
+                chatItem2.classList.add('list-group-item', 'chat-list-item');
+                chatItem2.setAttribute('data-userid', sender);
+                chatItem2.addEventListener('click', () => selectChat(sender));
+                const chatInfo = document.createElement('div');
+                chatInfo.classList.add('chat-info');
+                const strong = document.createElement('strong');
+                strong.textContent = sender;
+                chatInfo.appendChild(strong);
+                const preview = document.createElement('p');
+                preview.classList.add('preview');
+                chatInfo.appendChild(preview);
+                const dotIndicator = document.createElement('div');
+                dotIndicator.classList.add('dot-indicator');
+                dotIndicator.style.display = 'block';
+                chatInfo.appendChild(dotIndicator);
+                chatItem2.appendChild(chatInfo);
+                const chatListContainer = document.getElementById("chatsList");
+                chatListContainer.querySelector('ul').appendChild(chatItem2);
+                updatePreview(sender, text);
+            }
+        }
+        else if (sender === "{{ current_username }}") {
+            messageDiv.classList.add("sender");
+            messageDiv.innerHTML = `<div class="message-text sender" id="message-${messageId}">${text}</div>`;
+        } else {
+            messageDiv.classList.add("receiver");
+            messageDiv.innerHTML = `<div class="message-text receiver" id="message-${messageId}">${text}</div>`;
+            const chatItem = document.querySelector(`.chat-list-item[data-userid="${sender}"]`);
+            if (chatItem) {
+                const dotIndicator = chatItem.querySelector('.dot-indicator');
+                if (dotIndicator) {
+                    dotIndicator.style.display = 'none';
+                }
+                updatePreview(sender, text);
+            }
+        }
+        if (text.length > 30) {
+            messageDiv.querySelector('.message-text').classList.add('long-message');
+        }
+        messagesDiv.appendChild(messageDiv);
+        if (sender === "{{ current_username }}" || sender === chatName) {
+            const translateButtonDiv = document.createElement("div");
+            if (sender === currentUser) {
+                translateButtonDiv.classList.add("translate-button-container-right");
+            }
+            else {
+                translateButtonDiv.classList.add("translate-button-container-left");
+            }
+            const translateButton = document.createElement("button");
+            translateButton.textContent = "Translate";
+            translateButton.classList.add("btn", "btn-sm", "btn-secondary", "translate-button");
+            translateButton.onclick = function() {
+                translateMessage(text, messageId);
+            };
+            translateButtonDiv.appendChild(translateButton);
+            messagesDiv.appendChild(translateButtonDiv);
+        }
+        if (sender === "{{ current_username }}") {
+            const userName_to = document.getElementById("chatName").textContent;
+            updatePreview(userName_to, text);
+        }
+    }
+
+    function translateMessage(text, messageId) {
+        const currentUser = "{{ current_username }}";
+        return fetch(`/get_translation/${currentUser}/${text}`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.text();
+        })
+        .then(data => {
+            const translatedText = data;
+            const messageTextElement = document.getElementById(`message-${messageId}`);
+            if (messageTextElement) {
+                messageTextElement.textContent = translatedText;
+            } else {
+                console.error('Message text element not found.');
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching translation:', error);
+        });
+        }
+
+    function updatePreview(sender, text) {
+        const previewText = text.length > 10 ? text.substring(0, 10) + "..." : text;
+        const chatItem = document.querySelector(`.chat-list-item[data-userid="${sender}"]`);
+        chatItem.querySelector('.chat-info .preview').textContent = previewText;
+    }
+
+    function getConnectedUsers(username) {
+        return fetch(`/get_connected/${username}`)
+            .then(response => response.json())
+            .catch(error => {
+                console.error('Error fetching connected users:', error);
+                return [];
+            });
+    }
+
+    function sendMessage() {
+        const messageInput = document.getElementById("messageInput").value;
+        const userName = document.getElementById("chatName").textContent;
+
+        if (messageInput.trim() === "") {
+            return;
+        }
+
+        socket.emit('message', {
+            receiver_username: userName,
+            text: messageInput
+        });
+
+        const userName_to = document.getElementById("chatName").textContent;
+        updatePreview(userName_to, messageInput);
+
+        document.getElementById("messageInput").value = "";
+    }
+
+    function loadInitialPreviews() {
+        const chatItems = document.querySelectorAll('.chat-list-item');
+        chatItems.forEach(item => {
+            const userId = item.getAttribute('data-userid');
+            fetch(`/get_messages/${userId}`)
+                .then(response => response.json())
+                .then(messages => {
+                    const latestMessage = messages.length > 0 ? messages[messages.length - 1].text : "";
+                    updatePreview(userId, latestMessage);
+                    const unread = messages.length > 0 ? messages[messages.length - 1].unread : false;
+                    if (unread) {
+                        const chatItem = document.querySelector(`.chat-list-item[data-userid="${userId}"]`);
+                        const dotIndicator = chatItem.querySelector('.dot-indicator');
+                        if (dotIndicator) {
+                            dotIndicator.style.display = 'block';
+                        }
+                    }
+                })
+                .catch(error => console.error('Error fetching messages:', error));
+        });
+    }
+
+    window.addEventListener('DOMContentLoaded', function() {
+        loadInitialPreviews();
+    });
+
+    socket.on('message_send', message => {
+
+        const userName = document.getElementById("chatName").textContent;
+        const currentUser = "{{ current_username }}";
+        if (message.sender_username === currentUser || message.receiver_username === currentUser) {
+            displayMessage(message.sender_username, message.text);
+            const userId = message.sender_username === currentUser ? message.receiver_username : message.sender_username;
+            const chatItem = document.querySelector(`.chat-list-item[data-userid="${userId}"]`);
+            const chatName = document.getElementById("chatName").textContent;
+            if (chatName !== message.sender_username & chatName !== message.receiver_username) {
+                socket.emit('unread', {
+                    receiver_username: message.receiver_username,
+                    sender_username: message.sender_username,
+                    text: message.text
+                });
+            }
+            if (chatItem) {
+                const chatList = document.getElementById("chatsList").querySelector('ul');
+                chatList.insertAdjacentElement('afterbegin', chatItem);
+            }
+        }
+    });
+
+</script>
+</body>
+</html>

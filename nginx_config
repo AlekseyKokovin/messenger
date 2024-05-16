@@ -6,6 +6,6 @@ server {
     location / {
         include         uwsgi_params;
         # change this to the location of the uWSGI socket file (set in uwsgi.ini)
-        uwsgi_pass      unix:PROJECT_FOLDER_HERE/production_flask.sock;
+        uwsgi_pass      unix:/home/alex/app/production_flask.sock;
     }
 }
