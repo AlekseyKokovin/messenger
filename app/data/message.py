@@ -1,7 +1,8 @@
 import sqlalchemy
 from flask_login import UserMixin
 from sqlalchemy_serializer import SerializerMixin
-from db_session import SqlAlchemyBase
+
+from app.data.db_session import SqlAlchemyBase
 
 
 class Message(SqlAlchemyBase, UserMixin, SerializerMixin):
