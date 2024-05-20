@@ -351,4 +351,4 @@ def handle_message(data):
 if __name__ == '__main__':
     global_init('db/main.db')
     app.config['SECRET_KEY'] = os.urandom(12)
-    app.run(host='0.0.0.0', port=4444, debug=True)
+    socketio.run(app, host='0.0.0.0', port=4444)
