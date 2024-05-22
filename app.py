@@ -176,7 +176,7 @@ def confirm_mail():
     if 'code' not in session:
         session['code'] = ''.join(random.choices('0123456789', k=6))
         sender = "yandexproject9@gmail.com"
-        password = "qnydtwayiguskwpz"
+        password = "obsf dnrh knqr dlvi"
         send_email(sender, email, password, session['code'])
     return render_template('verify_email_register.html')
 
