@@ -9,7 +9,8 @@ from flask import Flask, redirect, render_template, request, session, jsonify
 from flask_login import LoginManager, login_user, login_required, logout_user
 from flask_socketio import SocketIO, emit
 from sqlalchemy import select, or_, and_
-
+from gevent.pywsgi import WSGIServer
+from geventwebsocket.handler import WebSocketHandler
 from data import db_session
 from data.db_session import global_init
 from data.message import Message
@@ -351,4 +352,6 @@ def handle_message(data):
 if __name__ == '__main__':
     global_init('db/main.db')
     app.config['SECRET_KEY'] = os.urandom(12)
-    socketio.run(app, host='0.0.0.0', port=4444, ssl_context=('cert.pem', 'key.pem'))
+    http_server = WSGIServer(('0.0.0.0', 4444), app, handler_class=WebSocketHandler, keyfile='key.pem',
+                             certfile='cert.pem')
+    http_server.serve_forever()
