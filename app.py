@@ -352,6 +352,4 @@ def handle_message(data):
 if __name__ == '__main__':
     global_init('db/main.db')
     app.config['SECRET_KEY'] = os.urandom(12)
-    http_server = WSGIServer(('0.0.0.0', 4444), app, handler_class=WebSocketHandler, keyfile='key.pem',
-                             certfile='cert.pem')
-    http_server.serve_forever()
+    socketio.run(app, host='0.0.0.0', port=4444)
