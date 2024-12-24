@@ -90,7 +90,7 @@ def two_factor_auth():
         email = session['email']
         session['code'] = ''.join(random.choices('0123456789', k=6))
         sender = "yandexproject9@gmail.com"
-        password = "kfjfhukstqonsvsb"
+        password = "*****"
         send_email(sender, email, password, session['code'])
     return render_template('verify_email_login.html')
 
